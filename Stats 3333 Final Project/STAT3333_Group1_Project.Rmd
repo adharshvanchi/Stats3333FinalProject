@@ -1,0 +1,801 @@
+---
+title: "STAT 3333 Project"
+author: "Group 1: Ramadharsh Vanchinathan, Jade Gee, Isabel Delacruz, Gabriela Ixcolin"
+date: "12/07/2020"
+output: pdf_document
+---
+
+```{r import libraries, message = F, warning = F }
+library(tidyverse)
+library(readxl)
+library(dplyr)
+library(testequavar)
+library(coin)
+library(ggplot2)
+library(gridExtra)
+library(lemon)
+```
+
+# Introduction, Problem, Purpose
+The data set consists of NASDAQ stock market data from December 7, 2015 to December 7, 2020 for key companies. We chose 4 prominent technology companies, Apple (APPL), Microsoft (MSFT), Alphabet (GOOGL), and Amazon (AMZN). They will be compared to industry leaders in other sectors, such as Pfizer (PFE) for health care and Goldman Sachs (GS) in the financial industry. 
+
+We would like to determine if there has been a discernible difference in the growth of the value in tech companies compared to companies in other industries. We will be using Permutation Testing, Regression, and Hypothesis Testing to determine any differences. 
+
+As Apple, Microsoft, Google, and Amazon have been vying for the title of “most valuable company” for years now, the purpose of this analysis is to determine the following:
+
+> What makes these companies, and the tech industry, different from other companies and industries?  
+
+
+## The Data
+
+We are using data from the official NASDAQ website with each company having thousands of days of market data. Each day for each company has 6 variables: `Date`, `Close`, `Volume`, `Open`, `High` and `Low`. We will be using the `High` value because that will show us the change between daily peaks in the stock price. The change in the `High` values will be used to determine the growth rate of each company. 
+
+The use of statistics is crucial for determining any meaningful results, as we are trying to deduce the following:
+
++ Are our findings statistically significant? 
+
++ Are the differences or similarities between the different companies and different industries significant? 
+
+## The Hypothesis
+
+The null hypothesis is that tech companies do not grow at a significantly different rate than other industries; while the research hypothesis is that tech companies grow significantly faster than other industries. 
+
+$$H_0: \text{Tech Sector} = \text{Other Sectors}$$
+$$H_A: \text{Tech Sector} > \text{Other Sectors}$$
+
+This project is important because as electronics and their manufacturers become ever more pervasive in our societies, homes and lives, their wealth and influence will grow as well. This concept may also be applied to other industries and companies to determine whether it is keeping pace with the rest of the market, and inform financial decisions.
+
+
+
+# Result and Discussion
+
+## Importing and Cleaning the Data
+
+First, we load in all of our data from their .xls files.
+
+```{r Reading in the data}
+# Load in and look at data
+AAPL <- read_excel("AAPL.xls")
+MSFT <- read_excel("MSFT.xls")
+GOOGL <- read_excel("GOOGL.xls")
+AMZN <- read_excel("AMZN.xls")
+CVX <- read_excel("CVX.xls")
+XOM <- read_excel("XOM.xls")
+PFE <- read_excel("PFE.xls")
+JNJ <- read_excel("JNJ.xls")
+GS <- read_excel("GS.xls")
+JPM <- read_excel("JPM.xls")
+NOC <- read_excel("NOC.xls")
+GE <- read_excel("GE.xls")
+```
+
+We load in the data, and extract the 'High' column from every companies' stock data as this is the statistic we are interested in. We then put all the data into dataframes based on the sector they belong to.
+
+```{r putting data into dfs, render= lemon_print}
+# Load in and look at data
+tech <- full_join(AAPL, MSFT, by="Date")
+tech2 <- full_join(GOOGL, AMZN, by="Date")
+tech_industries <- full_join(tech, tech2, by="Date") %>% select('Date',contains('High')) %>% 
+  rename('AAPL' = 'High.x.x','MSFT' = 'High.y.x', 'GOOGL' = 'High.x.y', 'AMZN' = 'High.y.y')
+
+oil_gas <- full_join(CVX, XOM, by="Date")  %>% select('Date',contains('High')) %>% 
+  rename('CVX' = 'High.x','XOM' = 'High.y')
+
+healthcare <- full_join(PFE, JNJ, by="Date") %>% select('Date',contains('High')) %>% 
+  rename('PFE' = 'High.x','JNJ' = 'High.y')
+
+finance <- full_join(GS, JPM, by="Date") %>% select('Date',contains('High')) %>% 
+  rename('GS' = 'High.x','JPM' = 'High.y')
+
+industrial <- full_join(NOC, GE, by="Date")%>% select('Date',contains('High')) %>% 
+  rename('NOC' = 'High.x','GE' = 'High.y')
+
+head(tech_industries)
+
+head(oil_gas)
+
+head(healthcare)
+
+head(industrial)
+```
+
+## The Rate of Change of Stock Values
+
+We used the `change` function to determine the rate of change of stock prices from one datapoint to the next.
+
+```{r change function}
+change <- function(table){
+  newtab <- numeric(length(table))
+  for(i in 1:length(table)-1){
+    newtab[i] <- table[i+1] - table[i]
+  }
+  return(newtab)
+}
+```
+Then we constructed dataframes of these changes values. We created one DF that contains the tech companies, and one that contains the other sectors.
+
+```{r creating rate of change tables, render=lemon_print}
+aapl <- change(as.numeric(tech_industries$AAPL))
+aapl <- aapl[-length(aapl)]
+msft <- change(as.numeric(tech_industries$MSFT))
+msft <- msft[-length(msft)]
+googl <- change(as.numeric(tech_industries$GOOGL))
+googl <- googl[-length(googl)]
+amzn <- change(as.numeric(tech_industries$AMZN))
+amzn <- amzn[-length(amzn)]
+
+cvx <- change(as.numeric(oil_gas$CVX))
+cvx <- cvx[-length(cvx)]
+xom <- change(as.numeric(oil_gas$XOM))
+xom <- xom[-length(xom)]
+Oil <- c(cvx,xom)
+
+pfe <- change(as.numeric(healthcare$PFE))
+pfe <- pfe[-length(pfe)]
+jnj <- change(as.numeric(healthcare$JNJ))
+jnj <- jnj[-length(jnj)]
+Health <- c(pfe,jnj)
+
+gs <- change(as.numeric(finance$GS))
+gs <- gs[-length(gs)]
+jpm <- change(as.numeric(finance$JPM))
+jpm <- jpm[-length(jpm)]
+Finance <- c(gs,jpm)
+
+noc <- change(as.numeric(industrial$NOC))
+noc <- noc[-length(noc)]
+ge <- change(as.numeric(industrial$GE))
+ge <- ge[-length(ge)]
+Industry <- c(noc,ge)
+
+tech_sector <- data.frame(aapl,msft,googl,amzn)
+
+sectors <- data.frame(Oil,Health,Finance,Industry)
+
+head(tech_sector)
+
+head(sectors)
+```
+## Permutation Testing
+
+We did the permutation tests comparing each tech company to the other sectors. We did this to determine if each tech company had greater growth than each of the other sectors. 
+
+$$H_0: \mu(\text{Other Sectors}) = \mu(\text{Tech Companies})$$
+$$H_A: \mu(\text{Other Sectors}) < \mu(\text{Tech Companies})$$
+
+```{r AAPL Permutation Test, result = 'hold'}
+N <- 10^4-1
+
+observed_oil <- mean(tech_sector$aapl) - mean(sectors$Oil)
+observed_health <- mean(tech_sector$aapl) - mean(sectors$Health)
+observed_finance <- mean(tech_sector$aapl) - mean(sectors$Finance)
+observed_industry <- mean(tech_sector$aapl) - mean(sectors$Industry)
+
+
+
+test_oil <- c(tech_sector$aapl, sectors$Oil)
+o_len <- length(test_oil)
+
+test_health <- c(tech_sector$aapl, sectors$Health)
+h_len <- length(test_health)
+
+test_finance <- c(tech_sector$aapl, sectors$Finance)
+f_len <- length(test_finance)
+
+test_industry <- c(tech_sector$aapl, sectors$Industry)
+i_len <- length(test_industry)
+
+a <- length(tech_sector$aapl)
+
+
+perm_Oil <- numeric(N)
+perm_Health <- numeric(N)
+perm_Finance <- numeric(N)
+perm_Industry <- numeric(N)
+
+
+for(i in 1:N){
+  o <- sample(o_len, size = a, replace = FALSE)
+  perm_Oil[i] <- mean(test_oil[o]) - mean(test_oil[-o])
+  
+  h <- sample(h_len, size = a, replace = FALSE)
+  perm_Health[i] <- mean(test_health[o]) - mean(test_health[-o])
+  
+  f <- sample(f_len, size = a, replace = FALSE)
+  perm_Finance[i] <- mean(test_finance[o]) - mean(test_finance[-o])
+  
+  ind <- sample(i_len, size = a, replace = FALSE)
+  perm_Industry[i] <- mean(test_industry[o]) - mean(test_industry[-o])
+}
+
+perm_aapl <- data.frame(perm_Oil,perm_Health, perm_Finance, perm_Industry)
+```
+
+
+```{r AAPL Permutation Test graphs and pval,results= 'hold'}
+
+require(gridExtra)
+po <- ggplot(perm_aapl, aes(x = perm_Oil)) + 
+  geom_histogram(binwidth = .1, fill = '#F9F6EF', col = 'black') + 
+  ylab("Frequency") + xlab('Oil') + 
+  geom_vline(xintercept=observed_oil, col = '#A3AAAE')
+
+ph <- ggplot(perm_aapl, aes(x = perm_Health)) + 
+  geom_histogram(binwidth = .1, fill = '#F9F6EF', col = 'black') + 
+  ylab("Frequency") + xlab('Health') + 
+  geom_vline(xintercept=observed_health, col = '#A3AAAE')
+
+pf <- ggplot(perm_aapl, aes(x = perm_Finance)) + 
+  geom_histogram(binwidth = .2, fill = '#F9F6EF', col = 'black') + 
+  ylab("Frequency") + xlab('Finance') + 
+  geom_vline(xintercept=observed_finance, col = '#A3AAAE')
+
+pi <- ggplot(perm_aapl, aes(x = perm_Industry)) + 
+  geom_histogram(binwidth = .2, fill = '#F9F6EF', col = 'black') + 
+  ylab("Frequency") + xlab('Industry') + 
+  geom_vline(xintercept=observed_industry, col = '#A3AAAE')
+grid.arrange(po,ph,pf,pi,ncol = 2, nrow = 2)
+
+# Oil
+(sum(perm_Oil >= observed_oil) + 1)/(N+1)
+
+#Health
+(sum(perm_Health >= observed_health) + 1)/(N+1)
+
+#Finance
+(sum(perm_Finance >= observed_finance) + 1)/(N+1)
+
+#Industry
+(sum(perm_Industry >= observed_industry) + 1)/(N+1)
+```
+
+
+
+Based on the p-values above, we can say with a 95% significance, AAPL grew faster than only the oil sector over the five year period.
+
+
+```{r MSFT Permutation Test}
+N <- 10^4-1
+
+observed_oil <- mean(tech_sector$msft) - mean(sectors$Oil)
+observed_health <- mean(tech_sector$msft) - mean(sectors$Health)
+observed_finance <- mean(tech_sector$msft) - mean(sectors$Finance)
+observed_industry <- mean(tech_sector$msft) - mean(sectors$Industry)
+
+
+
+test_oil <- c(tech_sector$msft, sectors$Oil)
+o_len <- length(test_oil)
+
+test_health <- c(tech_sector$msft, sectors$Health)
+h_len <- length(test_health)
+
+test_finance <- c(tech_sector$msft, sectors$Finance)
+f_len <- length(test_finance)
+
+test_industry <- c(tech_sector$msft, sectors$Industry)
+i_len <- length(test_industry)
+
+a <- length(tech_sector$msft)
+
+
+perm_Oil <- numeric(N)
+perm_Health <- numeric(N)
+perm_Finance <- numeric(N)
+perm_Industry <- numeric(N)
+
+
+for(i in 1:N){
+  o <- sample(o_len, size = a, replace = FALSE)
+  perm_Oil[i] <- mean(test_oil[o]) - mean(test_oil[-o])
+  
+  h <- sample(h_len, size = a, replace = FALSE)
+  perm_Health[i] <- mean(test_health[o]) - mean(test_health[-o])
+  
+  f <- sample(f_len, size = a, replace = FALSE)
+  perm_Finance[i] <- mean(test_finance[o]) - mean(test_finance[-o])
+  
+  ind <- sample(i_len, size = a, replace = FALSE)
+  perm_Industry[i] <- mean(test_industry[o]) - mean(test_industry[-o])
+}
+
+perm_msft <- data.frame(perm_Oil,perm_Health, perm_Finance, perm_Industry)
+```
+
+
+
+```{r MSFT Permutation Test graphs and pvals,results= 'hold'}
+
+require(gridExtra)
+po <- ggplot(perm_msft, aes(x = perm_Oil)) + 
+  geom_histogram(binwidth = .1, fill = '#F25022', col = 'black') + 
+  ylab("Frequency") + xlab('Oil') + 
+  geom_vline(xintercept=observed_oil, col = '#737373')
+
+ph <- ggplot(perm_msft, aes(x = perm_Health)) + 
+  geom_histogram(binwidth = .1, fill = '#7FBA00', col = 'black') + 
+  ylab("Frequency") + xlab('Health') +
+  geom_vline(xintercept=observed_health, col = '#737373')
+
+pf <- ggplot(perm_msft, aes(x = perm_Finance)) + 
+  geom_histogram(binwidth = .2, fill = '#00A4EF', col = 'black') + 
+  ylab("Frequency") + xlab('Finance') + 
+  geom_vline(xintercept=observed_finance, col = '#737373')
+
+pi <- ggplot(perm_msft, aes(x = perm_Industry)) + 
+  geom_histogram(binwidth = .2, fill = '#FFB900', col = 'black') + 
+  ylab("Frequency") + xlab('Industry') + 
+  geom_vline(xintercept=observed_industry, col = '#737373')
+grid.arrange(po,ph,pf,pi,ncol = 2, nrow = 2)
+
+# Oil
+(sum(perm_Oil >= observed_oil) + 1)/(N+1)
+
+#Health
+(sum(perm_Health >= observed_health) + 1)/(N+1)
+
+#Finance
+(sum(perm_Finance >= observed_finance) + 1)/(N+1)
+
+#Industry
+(sum(perm_Industry >= observed_industry) + 1)/(N+1)
+```
+Based on the p-values above, we can say with a 95% significance, MSFT grew faster than the oil and health care sectors over the five year period.
+
+
+```{r GOOGL Permutation Test, result = 'hold'}
+#
+N <- 10^4-1
+
+observed_oil <- mean(tech_sector$googl) - mean(sectors$Oil)
+observed_health <- mean(tech_sector$googl) - mean(sectors$Health)
+observed_finance <- mean(tech_sector$googl) - mean(sectors$Finance)
+observed_industry <- mean(tech_sector$googl) - mean(sectors$Industry)
+
+
+
+test_oil <- c(tech_sector$googl, sectors$Oil)
+o_len <- length(test_oil)
+
+test_health <- c(tech_sector$googl, sectors$Health)
+h_len <- length(test_health)
+
+test_finance <- c(tech_sector$googl, sectors$Finance)
+f_len <- length(test_finance)
+
+test_industry <- c(tech_sector$googl, sectors$Industry)
+i_len <- length(test_industry)
+
+a <- length(tech_sector$googl)
+
+
+perm_Oil <- numeric(N)
+perm_Health <- numeric(N)
+perm_Finance <- numeric(N)
+perm_Industry <- numeric(N)
+
+
+for(i in 1:N){
+  o <- sample(o_len, size = a, replace = FALSE)
+  perm_Oil[i] <- mean(test_oil[o]) - mean(test_oil[-o])
+  
+  h <- sample(h_len, size = a, replace = FALSE)
+  perm_Health[i] <- mean(test_health[o]) - mean(test_health[-o])
+  
+  f <- sample(f_len, size = a, replace = FALSE)
+  perm_Finance[i] <- mean(test_finance[o]) - mean(test_finance[-o])
+  
+  ind <- sample(i_len, size = a, replace = FALSE)
+  perm_Industry[i] <- mean(test_industry[o]) - mean(test_industry[-o])
+}
+
+perm_googl <- data.frame(perm_Oil,perm_Health, perm_Finance, perm_Industry)
+```
+
+```{r GOOGL Permutation Test graphs and pvals,results= 'hold'}
+
+require(gridExtra)
+po <- ggplot(perm_googl, aes(x = perm_Oil)) + 
+  geom_histogram(binwidth = 1, fill = '#F4B400', col = 'black') + 
+  ylab("Frequency") + xlab('Oil') + 
+  geom_vline(xintercept=observed_oil)
+
+ph <- ggplot(perm_googl, aes(x = perm_Health)) + 
+  geom_histogram(binwidth = 1, fill = '#DB4437', col = 'black') + 
+  ylab("Frequency") + xlab('Health') + 
+  geom_vline(xintercept=observed_health)
+
+pf <- ggplot(perm_googl, aes(x = perm_Finance)) + 
+  geom_histogram(binwidth = 1, fill = '#0F9D58', col = 'black') + 
+  ylab("Frequency") + xlab('Finance') + 
+  geom_vline(xintercept=observed_finance)
+
+pi <- ggplot(perm_googl, aes(x = perm_Industry)) + 
+  geom_histogram(binwidth = 1, fill = '#4285F4', col = 'black') + 
+  ylab("Frequency") + xlab('Industry') + 
+  geom_vline(xintercept=observed_industry)
+grid.arrange(po,ph,pf,pi,ncol = 2, nrow = 2)
+
+# Oil
+(sum(perm_Oil >= observed_oil) + 1)/(N+1)
+
+#Health
+(sum(perm_Health >= observed_health) + 1)/(N+1)
+
+#Finance
+(sum(perm_Finance >= observed_finance) + 1)/(N+1)
+
+#Industry
+(sum(perm_Industry >= observed_industry) + 1)/(N+1)
+```
+
+Based on the p-values above, we can say with a 95% significance, GOOGL grew faster than all the other sectors over the five year period.
+
+```{r AMZN Permutation Test}
+#
+N <- 10^4-1
+
+observed_oil <- mean(tech_sector$amzn) - mean(sectors$Oil)
+observed_health <- mean(tech_sector$amzn) - mean(sectors$Health)
+observed_finance <- mean(tech_sector$amzn) - mean(sectors$Finance)
+observed_industry <- mean(tech_sector$amzn) - mean(sectors$Industry)
+
+
+
+test_oil <- c(tech_sector$amzn, sectors$Oil)
+o_len <- length(test_oil)
+
+test_health <- c(tech_sector$amzn, sectors$Health)
+h_len <- length(test_health)
+
+test_finance <- c(tech_sector$amzn, sectors$Finance)
+f_len <- length(test_finance)
+
+test_industry <- c(tech_sector$amzn, sectors$Industry)
+i_len <- length(test_industry)
+
+a <- length(tech_sector$amzn)
+
+
+perm_Oil <- numeric(N)
+perm_Health <- numeric(N)
+perm_Finance <- numeric(N)
+perm_Industry <- numeric(N)
+
+
+for(i in 1:N){
+  o <- sample(o_len, size = a, replace = FALSE)
+  perm_Oil[i] <- mean(test_oil[o]) - mean(test_oil[-o])
+  
+  h <- sample(h_len, size = a, replace = FALSE)
+  perm_Health[i] <- mean(test_health[o]) - mean(test_health[-o])
+  
+  f <- sample(f_len, size = a, replace = FALSE)
+  perm_Finance[i] <- mean(test_finance[o]) - mean(test_finance[-o])
+  
+  ind <- sample(i_len, size = a, replace = FALSE)
+  perm_Industry[i] <- mean(test_industry[o]) - mean(test_industry[-o])
+}
+
+perm_amzn <- data.frame(perm_Oil,perm_Health, perm_Finance, perm_Industry)
+```
+
+
+```{r AMZN Permutation Test graphs and pvals,results= 'hold'}
+
+require(gridExtra)
+po <- ggplot(perm_amzn, aes(x = perm_Oil)) + 
+  geom_histogram(binwidth = 1, fill = '#FF9900', col = '#000000') + 
+  ylab("Frequency") + xlab('Oil') + 
+  geom_vline(xintercept=observed_oil)
+
+ph <- ggplot(perm_amzn, aes(x = perm_Health)) + 
+  geom_histogram(binwidth = 1, fill = '#FF9900', col = '#000000') + 
+  ylab("Frequency") + xlab('Health') + 
+  geom_vline(xintercept=observed_health)
+
+pf <- ggplot(perm_amzn, aes(x = perm_Finance)) + 
+  geom_histogram(binwidth = 1, fill = '#FF9900', col = '#000000') + 
+  ylab("Frequency") + xlab('Finance') + 
+  geom_vline(xintercept=observed_finance)
+
+pi <- ggplot(perm_amzn, aes(x = perm_Industry)) + 
+  geom_histogram(binwidth = 1, fill = '#FF9900', col = '#000000') + 
+  ylab("Frequency") + xlab('Industry') + 
+  geom_vline(xintercept=observed_industry)
+grid.arrange(po,ph,pf,pi,ncol = 2, nrow = 2)
+
+# Oil
+(sum(perm_Oil >= observed_oil) + 1)/(N+1)
+
+#Health
+(sum(perm_Health >= observed_health) + 1)/(N+1)
+
+#Finance
+(sum(perm_Finance >= observed_finance) + 1)/(N+1)
+
+#Industry
+(sum(perm_Industry >= observed_industry) + 1)/(N+1)
+```
+Based on the p-values above, we can say with a 95% significance, AMZN grew faster than all the other sectors over the five year period.
+
+## Regression
+
+We are finding the linear regressions of each company and each sector to determine their rates of change. This way we will be able to corroborate the results from the permutation testing with the original data. Plotting the data from each tech company we are studying and plotting their linear regressions will help demonstrate this.
+
+```{r tech company regression plots}
+require(gridExtra)
+amzn_plot <- ggplot(data = tech_industries, aes(x = as.Date(Date), y = as.numeric(AMZN) )) + 
+  geom_point() + xlab('Date') + ylab('AMZN stock price') + geom_smooth(method='lm', formula= y~x)
+
+aapl_plot <- ggplot(data = tech_industries, aes(x = as.Date(Date), y = as.numeric(AAPL) )) + 
+  geom_point() + xlab('Date') + ylab('AAPL stock price') + geom_smooth(method='lm', formula= y~x)
+
+msft_plot <- ggplot(data = tech_industries, aes(x = as.Date(Date), y = as.numeric(MSFT) )) + 
+  geom_point() + xlab('Date') + ylab('MSFT stock price') + geom_smooth(method='lm', formula= y~x)
+
+googl_plot <- ggplot(data = tech_industries, aes(x = as.Date(Date), y = as.numeric(GOOGL) )) + 
+  geom_point() + xlab('Date') + ylab('GOOGL stock price') +  geom_smooth(method='lm', formula= y~x)
+
+grid.arrange(amzn_plot,aapl_plot,msft_plot,googl_plot,ncol=2, nrow=2)
+```
+Then we do the same with the other sectors, averaging the values from both to provide a more comprehensive look at the sectors as a whole.
+
+```{r other sectors regression plots}
+# Averaging the sectors
+oil2 <- oil_gas %>% mutate(CVX,XOM,avg = ((as.numeric(CVX) + as.numeric(XOM))/2))
+
+health2 <- healthcare %>% mutate(PFE,JNJ,avg = ((as.numeric(PFE) + as.numeric(JNJ))/2))
+
+finance2 <- finance %>% mutate(GS,JPM,avg = ((as.numeric(GS) + as.numeric(JPM))/2))
+
+ind2 <- industrial %>% mutate(NOC,GE,avg = ((as.numeric(NOC) + as.numeric(GE))/2))
+
+# Graphing
+
+require(gridExtra)
+
+oil_plot <- ggplot(data = oil2, aes(x = as.Date(Date), y = as.numeric(avg) )) + geom_point() + 
+  xlab('Date') + ylab('Oil and Gas stock price (average)') + geom_smooth(method='lm', formula= y~x)
+
+health_plot <- ggplot(data = health2, aes(x = as.Date(Date), y = as.numeric(avg) )) + geom_point() + 
+  xlab('Date') + ylab('Healthcare stock price (average)') + geom_smooth(method='lm', formula= y~x)
+
+finance_plot <- ggplot(data = finance2, aes(x = as.Date(Date), y = as.numeric(avg) )) + geom_point() + 
+  xlab('Date') + ylab('Finance stock price (average)') + geom_smooth(method='lm', formula= y~x)
+
+ind_plot <- ggplot(data = ind2, aes(x = as.Date(Date), y = as.numeric(avg) )) + geom_point() + 
+  xlab('Date') + ylab('Industry stock price (average)') + geom_smooth(method='lm', formula= y~x)
+
+grid.arrange(oil_plot,health_plot,finance_plot,ind_plot,ncol=2, nrow=2)
+```
+
+The next step is to find the regression of each tech company and each sector to determine their growth rate from the data itself. We took the log linear regression of High and Date to better show the linear relationship between the two variables.
+
+```{r Amazon Regression Value}
+
+# Find the regression values Amazon
+
+reg_AMZN <- AMZN %>% select(Date, High) %>% 
+  mutate(Date = as.Date(AMZN$Date), High = as.numeric(AMZN$High))
+
+amzn.lm <- lm(log(High) ~ Date, data = reg_AMZN)
+summary(amzn.lm)
+
+#Diagnostics:Independence of Residuals? constant variance?
+plot(amzn.lm$fit, rstudent(amzn.lm), xlab = "Fit", ylab = "Residuals")
+abline(h = 0)
+lines(smooth.spline(amzn.lm$fit, rstudent(amzn.lm), df = 3), col = "blue")
+
+#Diagnostics: Normality of residuals?
+qqnorm(rstudent(amzn.lm))
+qqline(rstudent(amzn.lm))
+```
+Based on the slope and intercept p-values acquired from the linear regression of AMZN, we can conclude that they are both significantly not zero. The linear regression has a slope of 8.997e-04 and an intercept of -8.677. The residual standard error is 0.1265 on 260 degrees of freedom, and the normality graph shows that the data is acceptably normal. Thus the regression model is a good fit.
+
+```{r Microsoft Regression Value}
+# Find the regression values Microsoft
+
+reg_MSFT <- MSFT %>% select(Date, High) %>% 
+  mutate(Date = as.Date(MSFT$Date), High = as.numeric(MSFT$High))
+
+msft.lm <- lm(log(High) ~ Date, data = reg_MSFT)
+summary(msft.lm)
+
+#Diagnostics:Independence of Residuals? constant variance?
+plot(msft.lm$fit, rstudent(msft.lm), xlab = "Fit", ylab = "Residuals")
+abline(h = 0)
+lines(smooth.spline(msft.lm$fit, rstudent(msft.lm), df = 3), col = "blue")
+
+#Diagnostics: Normality of residuals?
+qqnorm(rstudent(msft.lm))
+qqline(rstudent(msft.lm))
+```
+Based on the slope and intercept p-values acquired from the linear regression of MSFT, we can conclude that they are both significantly not zero. The linear regression has a slope of 8.393e-04 and an intercept of -1.024e+01. The residual standard error is 0.06152 on 260 degrees of freedom, and the normality graph shows that the data is acceptably normal. Thus the regression model is a good fit.
+
+```{r Google Regression Value}
+# Find the regression values Google
+
+reg_GOOGL <- GOOGL %>% select(Date, High) %>% 
+  mutate(Date = as.Date(GOOGL$Date), High = as.numeric(GOOGL$High))
+
+GOOGL.lm <- lm(log(High) ~ Date, data = reg_GOOGL)
+summary(GOOGL.lm)
+
+#Diagnostics:Independence of Residuals? constant variance?
+plot(GOOGL.lm$fit, rstudent(GOOGL.lm), xlab = "Fit", ylab = "Residuals")
+abline(h = 0)
+lines(smooth.spline(GOOGL.lm$fit, rstudent(GOOGL.lm), df = 3), col = "blue")
+
+#Diagnostics: Normality of residuals?
+qqnorm(rstudent(GOOGL.lm))
+qqline(rstudent(GOOGL.lm))
+```
+Based on the slope and intercept p-values acquired from the linear regression of GOOGL, we can conclude that they are both significantly not zero. The linear regression has a slope of 4.257e-04 and an intercept of -5.435e-01. The residual standard error is 0.06922 on 260 degrees of freedom, and the normality graph shows that the data is acceptably normal. Thus the regression model is a good fit.
+
+
+```{r Apple Regression Value}
+# Find the regression values Apple
+
+reg_AAPL <- AAPL %>% select(Date, High) %>% 
+  mutate(Date = as.Date(AAPL$Date), High = as.numeric(AAPL$High))
+
+AAPL.lm <- lm(log(High) ~ Date, data = reg_AAPL)
+summary(AAPL.lm)
+
+#Diagnostics:Independence of Residuals? constant variance?
+plot(AAPL.lm$fit, rstudent(AAPL.lm), xlab = "Fit", ylab = "Residuals")
+abline(h = 0)
+lines(smooth.spline(AAPL.lm$fit, rstudent(AAPL.lm), df = 3), col = "blue")
+
+#Diagnostics: Normality of residuals?
+qqnorm(rstudent(AAPL.lm))
+qqline(rstudent(AAPL.lm))
+```
+
+Based on the slope and intercept p-values acquired from the linear regression of AAPL, we can conclude that they are both significantly not zero. The linear regression has a slope of 8.393e-04 and an intercept of -1.024e+01. The residual standard error is 0.06152 on 260 degrees of freedom, and the normality graph shows that the data is acceptably normal. Thus the regression model is a good fit.
+
+```{r Oil Regression Values}
+reg_oil <- oil2 %>% select(Date, avg) %>% mutate(Date = as.Date(oil2$Date))
+
+oil.lm <- lm(log(avg) ~ Date, data = reg_oil)
+summary(oil.lm)
+
+#Diagnostics:Independence of Residuals? constant variance?
+plot(oil.lm$fit, rstudent(oil.lm), xlab = "Fit", ylab = "Residuals")
+abline(h = 0)
+lines(smooth.spline(oil.lm$fit, rstudent(oil.lm), df = 3), col = "blue")
+
+#Diagnostics: Normality of residuals?
+qqnorm(rstudent(oil.lm))
+qqline(rstudent(oil.lm))
+
+```
+
+Based on the slope and intercept p-values acquired from the linear regression of the Oil and Gas sector, we can conclude that they are both significantly not zero. The linear regression has a slope of -1.568e-04 and an intercept of 7.292. The residual standard error is 0.1401 on 260 degrees of freedom, and the normality graph shows that the data is acceptably normal. Thus the regression model is a good fit.
+
+```{r Health Regression Values}
+reg_health <- health2 %>% select(Date, avg) %>% mutate(Date = as.Date(health2$Date))
+
+health.lm <- lm(log(avg) ~ Date, data = reg_health)
+summary(health.lm)
+
+#Diagnostics:Independence of Residuals? constant variance?
+plot(health.lm$fit, rstudent(health.lm), xlab = "Fit", ylab = "Residuals")
+abline(h = 0)
+lines(smooth.spline(health.lm$fit, rstudent(health.lm), df = 3), col = "blue")
+
+#Diagnostics: Normality of residuals?
+qqnorm(rstudent(health.lm))
+qqline(rstudent(health.lm))
+```
+
+Based on the slope and intercept p-values acquired from the linear regression of the Healthcare sector, we can conclude that they are both significantly not zero. The linear regression has a slope of 1.540e-04 and an intercept of 1.711. The residual standard error is 0.05264 on 260 degrees of freedom, and the normality graph shows that the data is acceptably normal. Thus the regression model is a good fit.
+
+```{r Finance Regression Values}
+reg_finance <- finance2 %>% select(Date, avg) %>% mutate(Date = as.Date(finance2$Date))
+
+finance.lm <- lm(log(avg) ~ Date, data = reg_finance)
+summary(finance.lm)
+
+#Diagnostics:Independence of Residuals? constant variance?
+plot(finance.lm$fit, rstudent(finance.lm), xlab = "Fit", ylab = "Residuals")
+abline(h = 0)
+lines(smooth.spline(finance.lm$fit, rstudent(finance.lm), df = 3), col = "blue")
+
+#Diagnostics: Normality of residuals?
+qqnorm(rstudent(finance.lm))
+qqline(rstudent(finance.lm))
+```
+
+Based on the slope and intercept p-values acquired from the linear regression of the Financial sector, we can conclude that they are both significantly not zero. The linear regression has a slope of 1.612e-04 and an intercept of 2.190. The residual standard error is 0.1402 on 260 degrees of freedom, and the normality graph shows that the data is acceptably normal. Thus the regression model is a good fit.
+
+```{r Industrial Regression Values}
+reg_ind <- ind2 %>% select(Date, avg) %>% mutate(Date = as.Date(ind2$Date))
+
+ind.lm <- lm(log(avg) ~ Date, data = reg_ind)
+summary(ind.lm)
+
+#Diagnostics:Independence of Residuals? constant variance?
+plot(ind.lm$fit, rstudent(ind.lm), xlab = "Fit", ylab = "Residuals")
+abline(h = 0)
+lines(smooth.spline(ind.lm$fit, rstudent(ind.lm), df = 3), col = "blue")
+
+#Diagnostics: Normality of residuals?
+qqnorm(rstudent(ind.lm))
+qqline(rstudent(ind.lm))
+```
+
+Based on the slope and intercept p-values acquired from the linear regression of the Industrial sector, we can conclude that they are both significantly not zero. The linear regression has a slope of 2.339e-04 and an intercept of 8.927e-01. The residual standard error is 0.09812 on 260 degrees of freedom, and the normality graph shows that the data is acceptably normal. Thus the regression model is a good fit.
+
+Then to visualize the rates of change, we plotted all the slopes, without the intercepts, to show the different slopes of each regression we have taken so far. 
+
+```{r Regression slope plots}
+# tech regressions
+amzn_y <- function(x){return(amzn.lm$coefficients[2]*x)}
+aapl_y <- function(x){return(AAPL.lm$coefficients[2]*x)}
+msft_y <- function(x){return(msft.lm$coefficients[2]*x)}
+googl_y <- function(x){return(GOOGL.lm$coefficients[2]*x)}
+# sector regressions
+oil_y <- function(x){return(oil.lm$coefficients[2]*x)}
+health_y <- function(x){return(health.lm$coefficients[2]*x)}
+finance_y <- function(x){return(finance.lm$coefficients[2]*x)}
+ind_y <- function(x){return(ind.lm$coefficients[2]*x)}
+
+# plotting
+plot(seq(-1,100),msft_y(seq(-1,100)),type = "l",lty=2, col = '#4285F4', xlab = 'x-axis', 
+     ylab = 'regression values of x', ylim = c(-.005 , .03), xlim = c(0,75))
+lines(seq(-1,100),amzn_y(seq(-1,100)), col = '#FF9900',lty=2)
+lines(seq(-1,100),aapl_y(seq(-1,100)), col = 'black',lty=2)
+lines(seq(-1,100),googl_y(seq(-1,100)), col = '#0F9D58',lty=2)
+
+lines(seq(-1,100),oil_y(seq(-1,100)), col = 'red',lty=1)
+lines(seq(-1,100),health_y(seq(-1,100)), col = 'blue',lty=1)
+lines(seq(-1,100),finance_y(seq(-1,100)), col = 'green',lty=1)
+lines(seq(-1,100),ind_y(seq(-1,100)), col = 'black',lty=1)
+
+title(main="Comparing Slopes of Linear Regressions")
+legend(-3,.0314, legend = c('MSFT','AMZN','AAPL','GOOGL','Oil','Healthcare','Finance','Industry'), 
+       c('#4285F4','#FF9900','black','#0F9D58'), lty=c(2,2,2,2,1,1,1,1), cex = .6 )
+```
+
+
+This plot illustrates that every tech company has a greater slope, or rate of growth, than every other sector. This helps confirm our conclusion that we reject the null hypothesis, implying that the tech companies we studied grew at a faster rate than companies in other sectors.
+
+# Conclusion
+
+After analyzing the data set consisting of NASDAQ market data from December 7, 2015 to December 7, 2020, we can say with confidence that our research hypothesis is evident in statistically showing that stock growth of consumer technology companies grows faster than other sectors. We were able to determine this with permutation testing. Microsoft (MSFT) grew faster than oil and health care, Apple (APPL) grew faster than oil, Alphabet(GOOGL) and Amazon(AMZN) grew faster than every other sector. Taking the linear regression of all the companies and all the sectors, we could conclude that all the tech companies grew faster than the other sectors. Therefore, we can reject our null hypothesis: Tech companies do not grow at a significantly higher rate than other industries. Our findings were statistically significant, supporting the claim that Apple, Microsoft, Google, and Amazon are the “fastest growing companies.” Our analysis helps determine the rapid integration of these corporations and their products into everyday life. By comparing them to the other major sectors in the stock market, they help us identify these companies and the sector as a whole, to have massive potential for growth in the future. It also helps inform investment strategies and technological trends.
+
+
+# Reference
+
+“Alphabet Inc. Class A Common Stock (GOOGL) Historical Data.” Nasdaq, 7 Dec. 2020, www.nasdaq.com/market-activity/stocks/googl/historical. 
+
+“AMZN.” Nasdaq, 7 Dec. 2020, www.nasdaq.com/market-activity/stocks/amzn. 
+
+“Apple Inc. Common Stock (AAPL) Historical Data.” Nasdaq, 7 Dec. 2020, www.nasdaq.com/market-activity/stocks/aapl/historical. 
+
+“CVX.” Nasdaq, 7 Dec. 2020, www.nasdaq.com/market-activity/stocks/cvx. 
+
+“Exxon Mobil Corporation Common Stock (XOM) Advanced Charting.” Nasdaq, 7 Dec. 2020, www.nasdaq.com/market-activity/stocks/xom/advanced-charting. 
+
+“General Electric Company Common Stock (GE) Advanced Charting.” Nasdaq, 7 Dec. 2020, www.nasdaq.com/market-activity/stocks/ge/advanced-charting. 
+
+“Goldman Sachs Group, Inc. (The) Common Stock (GS) Advanced Charting.” Nasdaq, 7 Dec. 2020, www.nasdaq.com/market-activity/stocks/gs/advanced-charting. 
+
+“Johnson &amp; Johnson Common Stock (JNJ) Advanced Charting.” Nasdaq, 7 Dec. 2020, www.nasdaq.com/market-activity/stocks/jnj/advanced-charting. 
+
+“JP Morgan Chase &amp; Co. Common Stock (JPM) Advanced Charting.” Nasdaq, 7 Dec. 2020, www.nasdaq.com/market-activity/stocks/jpm/advanced-charting. 
+
+“Microsoft Corporation Common Stock (MSFT) Historical Data.” Nasdaq, 7 Dec. 2020, www.nasdaq.com/market-activity/stocks/msft/historical. 
+
+“Northrop Grumman Corporation Common Stock (NOC) Advanced Charting.” Nasdaq, 7 Dec. 2020, www.nasdaq.com/market-activity/stocks/noc/advanced-charting. 
+
+“Pfizer, Inc. Common Stock (PFE) Advanced Charting.” Nasdaq, 7 Dec. 2020, www.nasdaq.com/market-activity/stocks/pfe/advanced-charting. 
+
+
+
+
+
+
+
